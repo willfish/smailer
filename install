@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+set -e
+
+REPO="willfish/smailer"
+
+# Fetch latest release tag
+LATEST_TAG=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep "tag_name" | cut -d '"' -f 4)
+
+if [ -z "$LATEST_TAG" ]; then
+  echo "❌ Failed to fetch latest release."
+  exit 1
+fi
+
+echo "🔍 Latest version: $LATEST_TAG"
+
+# Detect OS and architecture
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+# Normalize architecture names
+case $ARCH in
+  x86_64)
+    ARCH="amd64"
+    ;;
+  aarch64|arm64)
+    ARCH="arm64"
+    ;;
+  *)
+    echo "❌ Unsupported architecture: $ARCH"
+    echo "Supported: amd64, arm64"
+    exit 1
+    ;;
+esac
+
+# Check for supported OS
+case $OS in
+  linux|darwin)
+    ;;
+  *)
+    echo "❌ Unsupported operating system: $OS"
+    echo "Supported: Linux, macOS"
+    exit 1
+    ;;
+esac
+
+BINARY="smailer-${OS}-${ARCH}"
+URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$BINARY"
+
+echo "🚀 Downloading smailer for $OS-$ARCH..."
+echo "📥 URL: $URL"
+
+# Download binary
+if ! curl -L -f -o smailer "$URL"; then
+  echo "❌ Failed to download binary from $URL"
+  echo "Please check if the release exists for your platform."
+  exit 1
+fi
+
+# Make executable
+chmod +x smailer
+
+# Install to /usr/local/bin (requires sudo)
+if [ -w "/usr/local/bin" ]; then
+  mv smailer /usr/local/bin/smailer
+else
+  echo "🔐 Installing to /usr/local/bin (requires sudo)..."
+  sudo mv smailer /usr/local/bin/smailer
+fi
+
+echo "✅ Successfully installed smailer $LATEST_TAG"
+echo "🎉 Run 'smailer' to get started!"
+
+# Verify installation
+if command -v smailer >/dev/null 2>&1; then
+  echo "🔍 Installation verified: $(which smailer)"
+else
+  echo "⚠️  Warning: smailer not found in PATH. You may need to add /usr/local/bin to your PATH."
+fi
