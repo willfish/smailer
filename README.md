@@ -2,6 +2,10 @@
 
 Smailer is a fun, space-themed CLI tool built in Go using the Charm libraries (Bubble Tea, Lipgloss, etc.) for a terminal user interface (TUI). It allows you to browse and read emails stored in an AWS S3 bucket (e.g., from SES inbound emails under a prefix like "inbound/"). Emails are parsed, displayed in a paginated table, and rendered nicely in Markdown format. Features include deletion with confirmation, dynamic layouts, and a cosmic splash screen.
 
+
+https://github.com/user-attachments/assets/ef558cb6-c49c-4076-b703-f9cfd6cf738d
+
+
 ## ✨ Features
 
 - Pick a Bucket: If no `BUCKET` environment variable is set, it lists all S3 buckets (prioritizing those with "ses" in the name) for selection.
