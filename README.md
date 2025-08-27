@@ -78,6 +78,12 @@ go install github.com/willfish/smailer@latest
 smailer
 ```
 
+- If access denied and you're logged in to AWS you may need to export AWS profile first:
+
+```bash
+export AWS_PROFILE=my-profile smailer
+```
+
 ## 🤝 Contributing
 
 1. Fork the repository
