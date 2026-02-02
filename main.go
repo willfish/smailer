@@ -49,7 +49,7 @@ func main() {
 	}
 }
 
-func initialModel(client *s3.Client, bucket, prefix string) model {
+func initialModel(client s3API, bucket, prefix string) model {
 	s := spinner.New()
 	s.Spinner = spinner.Globe
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))

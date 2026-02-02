@@ -1,15 +1,23 @@
 package main
 
 import (
+	"context"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/glamour"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
+
+type s3API interface {
+	ListBuckets(ctx context.Context, params *s3.ListBucketsInput, optFns ...func(*s3.Options)) (*s3.ListBucketsOutput, error)
+	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+}
 
 type state int
 
@@ -39,7 +47,7 @@ type model struct {
 	previousState   state
 	selectedEmail   *Email
 	selectedIndex   int
-	s3Client        *s3.Client
+	s3Client        s3API
 	bucket          string
 	prefix          string
 	continuation    *string
