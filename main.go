@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -61,6 +62,7 @@ func initialModel(client s3API, bucket, prefix string) model {
 		hasMore:  true,
 		spinner:  s,
 		loading:  true,
+		saveDir:  defaultSaveDir(),
 	}
 
 	if bucket == "" {
@@ -70,4 +72,12 @@ func initialModel(client s3API, bucket, prefix string) model {
 	}
 
 	return m
+}
+
+func defaultSaveDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "Downloads/smailer"
+	}
+	return filepath.Join(home, "Downloads", "smailer")
 }

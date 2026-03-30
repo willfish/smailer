@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCutToWidth_PlainASCII(t *testing.T) {
@@ -119,5 +120,108 @@ func TestPlaceOverlay_BeyondBase(t *testing.T) {
 	// Should only have 1 line (base has 1 line, second overlay line is out of bounds)
 	if len(lines) != 1 {
 		t.Errorf("expected 1 line, got %d", len(lines))
+	}
+}
+
+func TestRenderStatusLine_IncludesFilterSaveDirAndStatus(t *testing.T) {
+	m := newReadyTestModel()
+	m.filterQuery = "hello"
+	m.saveDir = "/tmp/downloads/smailer"
+	m.statusMessage = "Saved"
+
+	line := m.renderStatusLine()
+
+	if !strings.Contains(line, "Filter: hello") {
+		t.Fatalf("missing filter in %q", line)
+	}
+	if !strings.Contains(line, "Downloads: smailer") {
+		t.Fatalf("missing save dir in %q", line)
+	}
+	if !strings.Contains(line, "Saved") {
+		t.Fatalf("missing status in %q", line)
+	}
+}
+
+func TestRenderEmailView_ShowsAttachmentSummaryAndKey(t *testing.T) {
+	m := newReadyTestModel()
+	m.selectedEmail = &Email{
+		From:        "alice@example.com",
+		To:          "bob@example.com",
+		Subject:     "Subject",
+		Date:        time.Date(2025, 3, 15, 10, 30, 0, 0, time.UTC),
+		Key:         "inbound/very/long/key/123456789",
+		Attachments: []Attachment{{Name: "invoice.pdf"}},
+	}
+
+	rendered := m.renderEmailView()
+
+	if !strings.Contains(rendered, "invoice.pdf") {
+		t.Fatalf("expected attachment summary in %q", rendered)
+	}
+	if !strings.Contains(rendered, "...long/key/123456789") {
+		t.Fatalf("expected shortened key in %q", rendered)
+	}
+}
+
+func TestView_InitialisingState(t *testing.T) {
+	m := model{}
+
+	if got := m.View(); got != "Initializing...\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestView_BucketLoadingState(t *testing.T) {
+	m := newReadyTestModel()
+	m.state = bucketSelectionState
+	m.loading = true
+
+	got := m.View()
+
+	if !strings.Contains(got, "Loading buckets") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestView_ListLoadingState(t *testing.T) {
+	m := newReadyTestModel()
+	m.state = listState
+	m.loading = true
+	m.visibleEmails = nil
+
+	got := m.View()
+
+	if !strings.Contains(got, "Loading emails") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestView_FilterOverlayAndDeleteModal(t *testing.T) {
+	m := newReadyTestModel()
+	m.state = confirmDeleteState
+	m.previousState = listState
+	m.filterActive = true
+	m.filterInput.SetValue("alice")
+	m.visibleEmails = []Email{{Key: "one"}}
+
+	got := m.View()
+
+	if !strings.Contains(got, "Filter:") {
+		t.Fatalf("expected filter overlay in %q", got)
+	}
+	if !strings.Contains(got, "Delete this email?") {
+		t.Fatalf("expected delete modal in %q", got)
+	}
+}
+
+func TestView_EmptyListState(t *testing.T) {
+	m := newReadyTestModel()
+	m.state = listState
+	m.loading = false
+
+	got := m.View()
+
+	if !strings.Contains(got, "No emails found") {
+		t.Fatalf("got %q", got)
 	}
 }

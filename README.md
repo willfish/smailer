@@ -9,8 +9,11 @@ https://github.com/user-attachments/assets/ef558cb6-c49c-4076-b703-f9cfd6cf738d
 ## ✨ Features
 
 - Pick a Bucket: If no `BUCKET` environment variable is set, it lists all S3 buckets (prioritizing those with "ses" in the name) for selection.
-- Paginated Email List: Displays recent emails in a table with columns for From, To, Subject, and Date. Loads more on scroll (10 at a time).
-- Email Viewing: Hit Enter to view the email body, rendered as styled Markdown (HTML emails converted via html-to-markdown and Glamour).
+- Paginated Email List: Displays recent emails in a table with columns for From, Subject, Date, and a short key suffix for disambiguation. Loads more on scroll (10 at a time).
+- Email Viewing: Hit Enter to load and view the email body, rendered as styled Markdown (HTML emails converted via html-to-markdown and Glamour).
+- Save Raw Email: Press 's' to save the original S3 object as an `.eml` file in `~/Downloads/smailer`. Filenames are derived from the email date and subject.
+- Filtering: Press `/` to filter the loaded emails by from, to, subject, or key.
+- Attachment Saving: Press 'a' from the email view to save any attachments.
 - Deletion: Press 'd' to delete from list or view, with a confirmation modal.
 
 ### Prerequisites
@@ -81,7 +84,7 @@ smailer
 - If access denied and you're logged in to AWS you may need to export AWS profile first:
 
 ```bash
-export AWS_PROFILE=my-profile smailer
+AWS_PROFILE=my-profile smailer
 ```
 
 ## 🤝 Contributing

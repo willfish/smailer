@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
@@ -26,14 +27,19 @@ var (
 			Foreground(lipgloss.Color("255")).
 			Width(40)
 	statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
+	filterStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("45")).
+			Padding(0, 1).
+			Background(lipgloss.Color("235"))
 )
 
 func (m *model) initComponents() {
 	columns := []table.Column{
 		{Title: "From", Width: 40},
-		{Title: "To", Width: 40},
 		{Title: "Subject", Width: 50},
-		{Title: "Date", Width: 30},
+		{Title: "Date", Width: 20},
+		{Title: "Key", Width: 18},
 	}
 
 	t := table.New(
@@ -61,6 +67,12 @@ func (m *model) initComponents() {
 	m.bucketsList = list.New([]list.Item{}, delegate, m.width-4, m.height-6)
 	m.bucketsList.Title = "Select a Bucket"
 	m.bucketsList.SetShowHelp(false)
+
+	ti := textinput.New()
+	ti.Placeholder = "Filter by from, to, or subject"
+	ti.CharLimit = 256
+	ti.Width = max(20, m.width-20)
+	m.filterInput = ti
 }
 
 func (m *model) updateComponents() {
@@ -73,8 +85,8 @@ func (m *model) updateComponents() {
 	numColumns := 4
 	borderWidth := numColumns + 1
 	availableContent := max(0, m.width-4-borderWidth)
-	proportions := []float64{0.25, 0.25, 0.35, 0.15}
-	mins := []int{20, 20, 30, 16}
+	proportions := []float64{0.28, 0.38, 0.18, 0.16}
+	mins := []int{22, 28, 16, 14}
 
 	var colWidths []int
 	sumWidth := 0
@@ -93,20 +105,34 @@ func (m *model) updateComponents() {
 
 	newColumns := []table.Column{
 		{Title: "From", Width: colWidths[0]},
-		{Title: "To", Width: colWidths[1]},
-		{Title: "Subject", Width: colWidths[2]},
-		{Title: "Date", Width: colWidths[3]},
+		{Title: "Subject", Width: colWidths[1]},
+		{Title: "Date", Width: colWidths[2]},
+		{Title: "Key", Width: colWidths[3]},
 	}
 	m.table.SetColumns(newColumns)
 
 	m.bucketsList.SetWidth(m.width - 4)
 	m.bucketsList.SetHeight(m.height - 6)
+	m.filterInput.Width = max(20, m.width-20)
 }
 
 func (m *model) updateTableRows() {
 	rows := []table.Row{}
-	for _, e := range m.emails {
-		rows = append(rows, table.Row{e.From, e.To, e.Subject, e.Date.Format("2006-01-02 15:04")})
+	m.visibleEmails = m.filteredEmails()
+	for _, e := range m.visibleEmails {
+		rows = append(rows, table.Row{
+			e.From,
+			e.Subject,
+			e.Date.Format("2006-01-02 15:04"),
+			shortKey(e.Key),
+		})
 	}
 	m.table.SetRows(rows)
+	if len(rows) == 0 {
+		m.table.SetCursor(0)
+		return
+	}
+	if m.table.Cursor() >= len(rows) {
+		m.table.SetCursor(len(rows) - 1)
+	}
 }

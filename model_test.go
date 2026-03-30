@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -146,8 +147,93 @@ func TestRenderListHelp_EscBackKeybinding(t *testing.T) {
 	m.loading = false
 
 	help := m.renderListHelp()
-	if !strings.Contains(help, "esc: back") {
-		t.Errorf("expected 'esc: back' in help, got %q", help)
+	if !strings.Contains(help, "esc: buckets") {
+		t.Errorf("expected 'esc: buckets' in help, got %q", help)
+	}
+}
+
+func TestFilteredEmails_MatchesQueryAcrossFields(t *testing.T) {
+	m := newTestModel()
+	m.emails = []Email{
+		{From: "alice@example.com", Subject: "Alpha", Key: "inbound/one"},
+		{To: "bob@example.com", Subject: "Beta", Key: "inbound/two"},
+	}
+	m.filterQuery = "bob"
+
+	filtered := m.filteredEmails()
+
+	if len(filtered) != 1 {
+		t.Fatalf("expected 1 filtered email, got %d", len(filtered))
+	}
+	if filtered[0].Key != "inbound/two" {
+		t.Fatalf("filtered key = %q", filtered[0].Key)
+	}
+}
+
+func TestItemMethods_ReturnTitleAndFilterValue(t *testing.T) {
+	i := item{title: "bucket-name"}
+
+	if i.Title() != "bucket-name" {
+		t.Fatalf("title = %q", i.Title())
+	}
+	if i.Description() != "" {
+		t.Fatalf("description = %q", i.Description())
+	}
+	if i.FilterValue() != "bucket-name" {
+		t.Fatalf("filter value = %q", i.FilterValue())
+	}
+}
+
+func TestUpdateComponents_SetsTableAndFilterWidths(t *testing.T) {
+	m := newReadyTestModel()
+	m.width = 100
+	m.height = 30
+
+	m.updateComponents()
+
+	if m.table.Width() != 96 {
+		t.Fatalf("table width = %d, want %d", m.table.Width(), 96)
+	}
+	if m.filterInput.Width <= 0 {
+		t.Fatalf("expected positive filter width, got %d", m.filterInput.Width)
+	}
+}
+
+func TestUpdateComponents_ScalesColumnsForSmallWidths(t *testing.T) {
+	m := newReadyTestModel()
+	m.width = 40
+	m.height = 20
+
+	m.updateComponents()
+
+	for _, col := range m.table.Columns() {
+		if col.Width < 1 {
+			t.Fatalf("column width too small: %#v", m.table.Columns())
+		}
+	}
+}
+
+func TestDefaultSaveDir_UsesDownloadsFolder(t *testing.T) {
+	got := defaultSaveDir()
+
+	if !strings.Contains(got, "Downloads") || !strings.Contains(got, "smailer") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDefaultSaveDir_FallsBackWhenHomeUnset(t *testing.T) {
+	original, hadHome := os.LookupEnv("HOME")
+	if hadHome {
+		defer os.Setenv("HOME", original)
+	} else {
+		defer os.Unsetenv("HOME")
+	}
+	os.Unsetenv("HOME")
+
+	got := defaultSaveDir()
+
+	if got != "Downloads/smailer" {
+		t.Fatalf("got %q", got)
 	}
 }
 

@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/glamour"
 )
@@ -33,16 +35,31 @@ type Email struct {
 	To      string
 	Subject string
 	Date    time.Time
+	S3Date  time.Time
 	Body    string
 	Key     string
+	Size    int64
+
+	RawLoaded   bool
+	BodyLoaded  bool
+	SummaryError bool
+	Raw         []byte
+	Attachments []Attachment
+}
+
+type Attachment struct {
+	Name string
+	Data []byte
 }
 
 type model struct {
 	table           table.Model
 	viewport        viewport.Model
 	spinner         spinner.Model
+	filterInput     textinput.Model
 	bucketsList     list.Model
 	emails          []Email
+	visibleEmails   []Email
 	state           state
 	previousState   state
 	selectedEmail   *Email
@@ -59,12 +76,16 @@ type model struct {
 	loading         bool
 	glamourRenderer *glamour.TermRenderer
 	statusMessage   string
+	filterActive    bool
+	filterQuery     string
+	saveDir         string
 }
 
 type emailsLoadedMsg struct {
 	emails       []Email
 	continuation *string
 	hasMore      bool
+	skipped      int
 }
 
 type bucketsLoadedMsg struct {
@@ -79,6 +100,20 @@ type emailDeletedMsg struct {
 	err error
 }
 
+type emailLoadedMsg struct {
+	email Email
+}
+
+type emailSavedMsg struct {
+	path string
+	err  error
+}
+
+type attachmentsSavedMsg struct {
+	paths []string
+	err   error
+}
+
 type clearStatusMsg struct{}
 
 type item struct {
@@ -88,3 +123,24 @@ type item struct {
 func (i item) Title() string       { return i.title }
 func (i item) Description() string { return "" }
 func (i item) FilterValue() string { return i.title }
+
+func (m model) filteredEmails() []Email {
+	if strings.TrimSpace(m.filterQuery) == "" {
+		return append([]Email(nil), m.emails...)
+	}
+
+	query := strings.ToLower(strings.TrimSpace(m.filterQuery))
+	filtered := make([]Email, 0, len(m.emails))
+	for _, email := range m.emails {
+		haystack := strings.ToLower(strings.Join([]string{
+			email.From,
+			email.To,
+			email.Subject,
+			email.Key,
+		}, " "))
+		if strings.Contains(haystack, query) {
+			filtered = append(filtered, email)
+		}
+	}
+	return filtered
+}

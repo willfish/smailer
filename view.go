@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -10,20 +11,17 @@ import (
 )
 
 func (m model) View() string {
-	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n", m.err)
-	}
 	if !m.ready {
 		return "Initializing...\n"
 	}
 
-	title := titleStyle.Width(m.width).Render("🌌 Smailer: S3 Inbox Reader 🚀")
+	title := titleStyle.Width(m.width).Render("Smailer: S3 Inbox Reader")
 
 	var baseView string
 
 	switch m.state {
 	case bucketSelectionState:
-		help := helpStyle.Render("↑/↓: navigate • enter: select • q: quit")
+		help := helpStyle.Render("up/down: navigate | enter: select | q: quit")
 		content := baseStyle.Width(m.width).Height(m.height - 4).Render(m.bucketsList.View())
 		baseView = lipgloss.JoinVertical(lipgloss.Left, title, content, help)
 	case listState, confirmDeleteState:
@@ -31,7 +29,7 @@ func (m model) View() string {
 			baseView = m.renderEmailView()
 		} else {
 			help := m.renderListHelp()
-			if len(m.emails) == 0 && !m.loading {
+			if len(m.visibleEmails) == 0 && !m.loading {
 				emptyMsg := lipgloss.NewStyle().
 					Foreground(lipgloss.Color("240")).
 					Align(lipgloss.Center).
@@ -56,11 +54,16 @@ func (m model) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, title, baseStyle.Width(m.width).Height(m.height-4).Render(content))
 	}
 
-	if (m.state == listState || (m.state == confirmDeleteState && m.previousState == listState)) && len(m.emails) == 0 && m.loading {
+	if (m.state == listState || (m.state == confirmDeleteState && m.previousState == listState)) && len(m.visibleEmails) == 0 && m.loading {
 		splash := splashStyle.Render(spaceSplash)
 		loading := m.spinner.View() + " Loading emails..."
 		content := lipgloss.JoinVertical(lipgloss.Center, splash, loading)
-		return lipgloss.JoinVertical(lipgloss.Left, title, baseStyle.Width(m.width).Height(m.height-4).Render(content))
+		baseView = lipgloss.JoinVertical(lipgloss.Left, title, baseStyle.Width(m.width).Height(m.height-4).Render(content))
+	}
+
+	if m.filterActive {
+		overlay := filterStyle.Render("Filter: " + m.filterInput.View())
+		baseView = placeOverlay(4, 3, overlay, baseView)
 	}
 
 	if m.state == confirmDeleteState {
@@ -76,39 +79,81 @@ func (m model) View() string {
 }
 
 func (m model) renderEmailView() string {
-	title := titleStyle.Width(m.width).Render("🌌 Smailer: S3 Inbox Reader 🚀")
-	help := helpStyle.Render("↑/↓: scroll • esc/q: back • d: delete")
+	title := titleStyle.Width(m.width).Render("Smailer: S3 Inbox Reader")
+	help := helpStyle.Render("up/down: scroll | esc/q: back | d: delete | s: save .eml | a: save attachments")
 	content := bodyStyle.Width(m.width).Height(m.height - 4).Render(m.viewport.View())
+	attachmentSummary := "Attachments: none"
+	if m.selectedEmail != nil && len(m.selectedEmail.Attachments) > 0 {
+		names := make([]string, 0, len(m.selectedEmail.Attachments))
+		for _, attachment := range m.selectedEmail.Attachments {
+			names = append(names, attachment.Name)
+		}
+		attachmentSummary = "Attachments: " + strings.Join(names, ", ")
+	}
 	header := headerStyle.Render(fmt.Sprintf(
-		"From:    %s\nTo:      %s\nSubject: %s\nDate:    %s",
+		"From:    %s\nTo:      %s\nSubject: %s\nDate:    %s\nKey:     %s\n%s",
 		m.selectedEmail.From,
 		m.selectedEmail.To,
 		m.selectedEmail.Subject,
 		m.selectedEmail.Date.Format("2006-01-02 15:04"),
+		shortKey(m.selectedEmail.Key),
+		attachmentSummary,
 	))
-	return lipgloss.JoinVertical(lipgloss.Left, title, header, content, help)
+	return lipgloss.JoinVertical(lipgloss.Left, title, header, content, help, m.renderStatusLine())
 }
 
 func (m model) renderListHelp() string {
-	parts := []string{"↑/↓: navigate • enter: read • d: delete • r: refresh • esc: back • q: quit"}
+	parts := []string{"up/down: navigate | enter: read | d: delete | s: save .eml | /: filter | r: refresh | esc: buckets | q: quit"}
 
-	countStr := fmt.Sprintf("%d emails", len(m.emails))
+	visibleCount := len(m.visibleEmails)
+	if visibleCount == 0 && len(m.emails) > 0 && !m.filterActive {
+		visibleCount = len(m.filteredEmails())
+	}
+	countStr := fmt.Sprintf("%d emails", visibleCount)
+	if m.filterQuery != "" {
+		countStr += fmt.Sprintf(" (filtered from %d)", len(m.emails))
+	}
 	if m.hasMore {
 		countStr += " (more available)"
 	}
 	parts = append(parts, countStr)
 
-	help := helpStyle.Render(strings.Join(parts, " • "))
+	help := helpStyle.Render(strings.Join(parts, " | "))
 
 	if m.loading {
 		help += " (loading more...)"
 	}
 
-	if m.statusMessage != "" {
-		help += "  " + statusStyle.Render(m.statusMessage)
+	status := m.renderStatusLine()
+	if status != "" {
+		help += "\n" + status
 	}
 
 	return help
+}
+
+func (m model) renderStatusLine() string {
+	parts := []string{}
+	if m.filterQuery != "" {
+		parts = append(parts, fmt.Sprintf("Filter: %s", m.filterQuery))
+	}
+	if m.saveDir != "" {
+		parts = append(parts, fmt.Sprintf("Downloads: %s", filepath.Base(m.saveDir)))
+	}
+	if m.statusMessage != "" {
+		parts = append(parts, m.statusMessage)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return helpStyle.Render(strings.Join(parts, " | "))
+}
+
+func shortKey(key string) string {
+	if len(key) <= 18 {
+		return key
+	}
+	return "..." + key[len(key)-18:]
 }
 
 func cutToWidth(s string, w int) (prefix, remainder string) {
