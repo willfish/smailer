@@ -27,3 +27,4 @@ vendor/
 
 .envrc
 .direnv
+/.pre-commit-config-nix.yaml
